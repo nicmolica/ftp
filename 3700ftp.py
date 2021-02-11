@@ -16,12 +16,12 @@ class Operation(enum.Enum):
 # available to the user. Can be either an FTP address or a local path.
 class Address:
     def __init__(self, url):
-        self.user = 'anonymous'
-        self.password = ''
-        self.host = ''
-        self.port = 21
+        self.user = 'anonymous' # default user is anonymous
+        self.password = ''      # default password is no password
+        self.port = 21          # default port is 21
+        self.is_ftp = False     # default is_ftp flag is false (indicates whether this address is ftp or just a path)
+        self.host = None
         self.path = ''
-        self.is_ftp = False
         try:
             self.parse_url(url)
         except:
@@ -33,7 +33,7 @@ class Address:
         # determine if scheme of URL is valid
         if parsed.scheme == 'ftp':
             self.is_ftp = True
-        elif parsed.scheme == '':
+        elif parsed.scheme == '' and parsed.hostname == None:
             self.is_ftp = False
         else:
             raise TypeError("Invalid path scheme. Must be an FTP or local path.")
@@ -41,12 +41,17 @@ class Address:
         # pull out pieces of netloc, defaulting to presets
         self.host = parsed.hostname
         self.path = parsed.path
-        if parsed.username != '':
+        if parsed.username != None:
             self.user = parsed.username
-        if parsed.password != '':
+        if parsed.password != None:
             self.password = parsed.password
         if parsed.port != None:
             self.port = parsed.port
+        
+    def is_empty(self):
+        return self.user == 'anonymous' and self.password == '' and \
+            self.port == 21 and self.is_ftp == False and self.host == None \
+                and self.path == ''
 
 # Class to represent user input into the program. Contains fields to represent the requested operation
 # and the 2 paths provided by the user. For single-path operations, the second path is empty.
@@ -68,8 +73,9 @@ class UserInput:
 # Class to represent the control socket used to talk to the server.
 class ControlSocket:
     def __init__(self, addr1, addr2):
-        if addr1.is_ftp == addr2.is_ftp:
-            print("One address must be local and the other must be on a server.")
+        # fail if user didn't provide an FTP address
+        if addr1.is_ftp == addr2.is_ftp and (not addr1.is_empty() or not addr2.is_empty()):
+            print("At least one address must be a server address.")
             exit(1)
         elif addr1.is_ftp:
             self.ftp = addr1
@@ -83,11 +89,47 @@ class ControlSocket:
         except:
             print("Failed to connect to the server.")
             exit(1)
+    
+    def login(self):
+        # wait for 220 code before logging in, complain if something else is recieved
+        if self.read()[:3] == "220":
+            pass
+        else:
+            print("Client did not receive 220 code.")
+            exit(1)
 
+        # log into server with username and password
+        self.sock.sendall(("USER " + str(self.ftp.user) + "\r\n").encode())
+        self.sock.sendall(("PASS " + str(self.ftp.password) + "\r\n").encode())
+
+        # set server modes to prep for sending/receiving data
+        self.sock.sendall(("TYPE I\r\n").encode())
+        self.sock.sendall(("MODE S\r\n").encode())
+        self.sock.sendall(("STRU F\r\n").encode())
+
+    def read(self):
+        # read data using recv until the end flag \r\n is found
+        msg = ""
+        while msg == "" or msg[len(msg) - 2:] != "\r\n":
+            packet = self.sock.recv(8192)
+            msg = msg + packet.decode('utf-8')
+
+        # display server error if the code is 4xx or higher
+        if int(msg[0]) > 3:
+            print("Server error: " + msg)
+            exit(1)
+        return msg
+
+# Main method that handles high-level program logic.
 def main():
+    # get user input
     cmd = UserInput(sys.argv)
+    
+    # initialize socket, connect and log into server
     ctrl = ControlSocket(cmd.path1, cmd.path2)
     ctrl.connect()
+    ctrl.login()
 
+# Begin program execution in main method.
 if __name__ == "__main__":
     main()
