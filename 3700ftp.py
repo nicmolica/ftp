@@ -306,7 +306,7 @@ class DataSocket:
         '''
         msg = ""
         packet = None
-        while msg == "" or packet.decode('utf-8') == '':
+        while msg == "" and packet != None:
             packet = self.sock.recv(8192)
             msg = msg + packet.decode('utf-8')
         return msg
