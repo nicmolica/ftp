@@ -1,3 +1,4 @@
+import os
 import sys
 import socket
 import urllib.parse
@@ -154,13 +155,13 @@ class ControlSocket:
         elif user_input.cmd == Operation.mkdir:
             self.mkdir(user_input.ftp.path)
         elif user_input.cmd == Operation.rm:
-            self.rm(user_input.ftp.path)
+            self.rm(user_input.ftp)
         elif user_input.cmd == Operation.rmdir:
             self.rmdir(user_input.ftp.path)
         elif user_input.cmd == Operation.cp:
-            pass
+            self.cp(user_input.path1, user_input.path2)
         elif user_input.cmd == Operation.mv:
-            pass
+            self.mv(user_input.path1, user_input.path2)
 
     def init_data_socket(self):
         self.send("PASV\r\n")
@@ -182,7 +183,7 @@ class ControlSocket:
         return data_stream
     
     def send(self, msg):
-        self.sock.sendall((msg).encode())
+        self.sock.sendall(msg.encode())
     
     def ls(self, path):
         data_stream = self.init_data_socket()
@@ -195,19 +196,34 @@ class ControlSocket:
         self.send("MKD " + path + "\r\n")
         self.read()
 
-    def rm(self, path):
-        self.send("DELE " + path + "\r\n")
-        self.read()
+    def rm(self, addr):
+        if addr.is_ftp:
+            self.send("DELE " + addr.path + "\r\n")
+            self.read()
+        else:
+            os.remove(addr.path)
 
     def rmdir(self, path):
         self.send("RMD " + path + "\r\n")
         self.read()
 
-    def cp(self):
-        pass
+    def cp(self, src, dest):
+        data_stream = self.init_data_socket()
+        if src.is_ftp:
+            self.send("RETR " + src.path + "\r\n")
+            f = open(dest.path, 'w')
+            f.write(data_stream.read())
+        else:
+            self.send("STOR " + dest.path + "\r\n")
+            f = open(src.path, 'r')
+            data_stream.send(f.read())
+        f.close()
+        self.read()
+        data_stream.quit()
 
-    def mv(self):
-        pass
+    def mv(self, src, dest):
+        self.cp(src, dest)
+        self.rm(src)
 
 class DataSocket:
     def __init__(self, ip, port):
@@ -236,7 +252,7 @@ class DataSocket:
         return msg
 
     def send(self, msg):
-        self.sock.sendall((msg).encode())
+        self.sock.sendall(msg.encode())
     
     def quit(self):
         self.sock.close()
