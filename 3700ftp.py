@@ -88,13 +88,18 @@ class ControlSocket:
             self.ftp = addr1
         else:
             self.ftp = addr2
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        
+        try:
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        except:
+            print("Failed to create socket.")
+            exit(1)
 
     def connect(self):
         try:
             self.sock.connect((self.ftp.host, self.ftp.port))
         except:
-            print("Failed to connect to the server.")
+            print("Command socket failed to connect to the server.")
             exit(1)
     
     def login(self):
@@ -106,17 +111,23 @@ class ControlSocket:
             exit(1)
 
         # log into server with username and password
-        self.sock.sendall(("USER " + str(self.ftp.user) + "\r\n").encode())
-        self.read()
-        self.sock.sendall(("PASS " + str(self.ftp.password) + "\r\n").encode())
-        self.read()
+        self.send("USER " + str(self.ftp.user) + "\r\n")
+        code = self.read()[:3]
+        if code == '331' and self.ftp.password == '':
+            print("Password required by server and none provided.")
+            exit(1)
+        elif code == '230':
+            pass
+        else:
+            self.send("PASS " + str(self.ftp.password) + "\r\n")
+            self.read()
 
         # set server modes to prep for sending/receiving data
-        self.sock.sendall(("TYPE I\r\n").encode())
+        self.send("TYPE I\r\n")
         self.read()
-        self.sock.sendall(("MODE S\r\n").encode())
+        self.send("MODE S\r\n")
         self.read()
-        self.sock.sendall(("STRU F\r\n").encode())
+        self.send("STRU F\r\n")
         self.read()
 
     def read(self):
@@ -133,16 +144,17 @@ class ControlSocket:
         return msg
 
     def quit(self):
-        self.sock.sendall(("QUIT\r\n").encode())
+        self.send("QUIT\r\n")
         self.read()
+        self.sock.close()
 
     def execute(self, user_input):
         if user_input.cmd == Operation.ls:
-            pass
+            self.ls(user_input.ftp.path)
         elif user_input.cmd == Operation.mkdir:
             self.mkdir(user_input.ftp.path)
         elif user_input.cmd == Operation.rm:
-            pass
+            self.rm(user_input.ftp.path)
         elif user_input.cmd == Operation.rmdir:
             self.rmdir(user_input.ftp.path)
         elif user_input.cmd == Operation.cp:
@@ -150,18 +162,45 @@ class ControlSocket:
         elif user_input.cmd == Operation.mv:
             pass
 
-    def ls(self):
-        pass
+    def init_data_socket(self):
+        self.send("PASV\r\n")
+        pasv_response = self.read()
+        if pasv_response[:3] != '227':
+            print("Server refused data transfer with message: " + pasv_response)
+            exit(1)
+        
+        try:
+            nums = pasv_response.split("(")[1].split(")")[0].split(",")
+            ip = nums[0] + "." + nums[1] + "." + nums[2] + "." + nums[3]
+            port = int(nums[4]) * 256 + int(nums[5])
+        except:
+            print("Server did not provide valid data stream.")
+            exit(1)
+
+        data_stream = DataSocket(ip, port)
+        data_stream.connect()
+        return data_stream
+    
+    def send(self, msg):
+        self.sock.sendall((msg).encode())
+    
+    def ls(self, path):
+        data_stream = self.init_data_socket()
+        self.send("LIST " + path + "\r\n")
+        print(data_stream.read())
+        self.read()
+        data_stream.quit()
 
     def mkdir(self, path):
-        self.sock.sendall(("MKD " + path + "\r\n").encode())
+        self.send("MKD " + path + "\r\n")
         self.read()
 
-    def rm(self):
-        pass
+    def rm(self, path):
+        self.send("DELE " + path + "\r\n")
+        self.read()
 
     def rmdir(self, path):
-        self.sock.sendall(("RMD " + path + "\r\n").encode())
+        self.send("RMD " + path + "\r\n")
         self.read()
 
     def cp(self):
@@ -169,6 +208,38 @@ class ControlSocket:
 
     def mv(self):
         pass
+
+class DataSocket:
+    def __init__(self, ip, port):
+        self.ip = ip
+        self.port = port
+        try:
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        except:
+            print("Failed to create socket.")
+            exit(1)
+    
+    def connect(self):
+        try:
+            self.sock.connect((self.ip, self.port))
+        except:
+            print("Data socket failed to connect to the server.")
+            exit(1)
+
+    def read(self):
+        # read data using recv until no more data is recieved
+        msg = ""
+        packet = None
+        while msg == "" or packet.decode('utf-8') == '':
+            packet = self.sock.recv(8192)
+            msg = msg + packet.decode('utf-8')
+        return msg
+
+    def send(self, msg):
+        self.sock.sendall((msg).encode())
+    
+    def quit(self):
+        self.sock.close()
 
 # Main method that handles high-level program logic.
 def main():
