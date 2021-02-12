@@ -304,9 +304,9 @@ class DataSocket:
     def read(self):
         ''' Read data from the server. Continue reading until we recieve empty messages.
         '''
-        msg = ""
+        msg = ''
         packet = None
-        while msg == "" and packet != None:
+        while packet != b'':
             packet = self.sock.recv(8192)
             msg = msg + packet.decode('utf-8')
         return msg
