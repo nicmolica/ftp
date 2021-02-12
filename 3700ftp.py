@@ -69,13 +69,20 @@ class UserInput:
         else:
             print("Operation must be one of: ls, mkdir, rm, rmdir, cp, mv and include 1 or 2 arguments.")
             exit(1)
+        
+        if self.path1.is_ftp:
+            self.ftp = self.path1
+        elif self.path2.is_ftp:
+            self.ftp = self.path2
+        else:
+            print("One address must be a server address.")
 
 # Class to represent the control socket used to talk to the server.
 class ControlSocket:
     def __init__(self, addr1, addr2):
         # fail if user didn't provide an FTP address
         if addr1.is_ftp == addr2.is_ftp and (not addr1.is_empty() or not addr2.is_empty()):
-            print("At least one address must be a server address.")
+            print("One address must be a server address.")
             exit(1)
         elif addr1.is_ftp:
             self.ftp = addr1
@@ -100,12 +107,17 @@ class ControlSocket:
 
         # log into server with username and password
         self.sock.sendall(("USER " + str(self.ftp.user) + "\r\n").encode())
+        self.read()
         self.sock.sendall(("PASS " + str(self.ftp.password) + "\r\n").encode())
+        self.read()
 
         # set server modes to prep for sending/receiving data
         self.sock.sendall(("TYPE I\r\n").encode())
+        self.read()
         self.sock.sendall(("MODE S\r\n").encode())
+        self.read()
         self.sock.sendall(("STRU F\r\n").encode())
+        self.read()
 
     def read(self):
         # read data using recv until the end flag \r\n is found
@@ -120,15 +132,59 @@ class ControlSocket:
             exit(1)
         return msg
 
+    def quit(self):
+        self.sock.sendall(("QUIT\r\n").encode())
+        self.read()
+
+    def execute(self, user_input):
+        if user_input.cmd == Operation.ls:
+            pass
+        elif user_input.cmd == Operation.mkdir:
+            self.mkdir(user_input.ftp.path)
+        elif user_input.cmd == Operation.rm:
+            pass
+        elif user_input.cmd == Operation.rmdir:
+            self.rmdir(user_input.ftp.path)
+        elif user_input.cmd == Operation.cp:
+            pass
+        elif user_input.cmd == Operation.mv:
+            pass
+
+    def ls(self):
+        pass
+
+    def mkdir(self, path):
+        self.sock.sendall(("MKD " + path + "\r\n").encode())
+        self.read()
+
+    def rm(self):
+        pass
+
+    def rmdir(self, path):
+        self.sock.sendall(("RMD " + path + "\r\n").encode())
+        self.read()
+
+    def cp(self):
+        pass
+
+    def mv(self):
+        pass
+
 # Main method that handles high-level program logic.
 def main():
     # get user input
-    cmd = UserInput(sys.argv)
+    user_input = UserInput(sys.argv)
     
     # initialize socket, connect and log into server
-    ctrl = ControlSocket(cmd.path1, cmd.path2)
+    ctrl = ControlSocket(user_input.path1, user_input.path2)
     ctrl.connect()
     ctrl.login()
+
+    # execute user command
+    ctrl.execute(user_input)
+
+    # terminate control socket
+    ctrl.quit()
 
 # Begin program execution in main method.
 if __name__ == "__main__":
