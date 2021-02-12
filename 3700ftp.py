@@ -92,6 +92,7 @@ class UserInput:
             self.ftp = self.path2
         else:
             print("One address must be a server address.")
+            exit(1)
 
 # Class to represent the control socket used to talk to the server.
 class ControlSocket:
