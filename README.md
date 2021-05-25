@@ -1,7 +1,7 @@
 Nicholas Molica (nicmolica), February 2021
 
 # FTP Client Implementation
-This is a manual implementation of a File Transport Protocol client. It supports the `ls`, `mkdir`, `rm`, `rmdir`, `cp` and `mv` commands. It is written from scratch, but is designed to fit the spec required by an FTP server. Even though this client fits the FTP spec, it is not recommended to attempt to run this code on a public-facing FTP server, since the client is unverified. It is possible that the sever could be convinced that this client is malicious, potentially causing the server to blacklist you.
+This is a manual implementation of a File Transport Protocol client. It supports the `ls`, `mkdir`, `rm`, `rmdir`, `cp` and `mv` commands. It is written from scratch, but is designed to fit the spec required by an FTP server. Even though this client fits the FTP spec, it is not recommended to attempt to run this code on a public-facing FTP server, since the client is unverified. It is possible that the server could become convinced that this client is malicious, potentially causing the server to blacklist you.
 
 ## Technology Used
 This client is entirely implemented in Python. It utilizes the `sys` and `socket` modules, as well as several other general purpose modules. It is written in an object-oriented format to make it easily extensible. I developed this client independently.
